@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     environment {
-        BACKEND_IMAGE  = "contactos-backend:latest"
-        FRONTEND_IMAGE = "contactos-frontend:latest"
+        BACKEND_IMAGE  = "belencita12/contactos-backend:latest"
+        FRONTEND_IMAGE = "belencita12/contactos-frontend:latest"
     }
 
     stages {
@@ -15,33 +15,44 @@ pipeline {
             }
         }
 
-        stage('Build Backend') {
+        stage('Build') {
             steps {
-                echo 'Construyendo imagen del backend...'
-                sh 'docker build -t $BACKEND_IMAGE ./backend'
+                echo 'Instalando dependencias del backend...'
+                sh 'cd backend && npm install'
             }
         }
 
-        stage('Build Frontend') {
+        stage('Docker Build') {
             steps {
-                echo 'Construyendo imagen del frontend...'
+                echo 'Construyendo imagenes Docker...'
+                sh 'docker build -t $BACKEND_IMAGE ./backend'
                 sh 'docker build -t $FRONTEND_IMAGE ./frontend'
             }
         }
 
-        stage('Deploy to Kubernetes') {
+        stage('Push') {
             steps {
-                echo 'Desplegando en Kubernetes...'
-                sh 'kubectl apply -f k8s/'
-                sh 'kubectl rollout restart deployment/backend -n devops-lab'
-                sh 'kubectl rollout restart deployment/frontend -n devops-lab'
+                echo 'Subiendo imagenes a Docker Hub...'
+                sh 'docker push $BACKEND_IMAGE'
+                sh 'docker push $FRONTEND_IMAGE'
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                echo 'Desplegando con Docker Compose...'
+                sh 'docker compose down || true'
+                sh 'docker compose up -d'
             }
         }
 
         stage('Verify') {
             steps {
-                echo 'Verificando pods...'
-                sh 'kubectl get pods -n devops-lab'
+                echo 'Verificando servicios...'
+                sh 'docker compose ps'
+                sh 'sleep 5'
+                sh 'curl -f http://localhost:3000/health || echo "Backend no responde aun"'
+                sh 'curl -f http://localhost:3000/version'
             }
         }
     }
@@ -51,5 +62,3 @@ pipeline {
         failure { echo 'Pipeline fallido. Revisar logs.' }
     }
 }
-
-

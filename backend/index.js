@@ -14,7 +14,17 @@ const pool = new Pool({
   password: process.env.DB_PASSWORD || 'postgres',
 });
 
-// Inicializar tabla
+// ── Métricas simples para Prometheus ─────────────────────────────────────────
+let requestCount = 0;
+let errorCount = 0;
+
+app.use((req, res, next) => {
+  requestCount++;
+  res.on('finish', () => { if (res.statusCode >= 400) errorCount++; });
+  next();
+});
+
+// ── Inicializar tabla ─────────────────────────────────────────────────────────
 async function initDB() {
   try {
     await pool.query(`
@@ -27,7 +37,6 @@ async function initDB() {
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
-    // Datos de ejemplo
     const count = await pool.query('SELECT COUNT(*) FROM contactos');
     if (parseInt(count.rows[0].count) === 0) {
       await pool.query(`
@@ -46,21 +55,52 @@ async function initDB() {
   }
 }
 
-// GET /health
+// ── Endpoints obligatorios ────────────────────────────────────────────────────
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'contactos-backend' });
 });
 
-// GET /contactos?search=...
+app.get('/version', (req, res) => {
+  res.json({
+    version: process.env.APP_VERSION || '1.0.0',
+    service: 'contactos-backend',
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
+// ── Métricas para Prometheus ──────────────────────────────────────────────────
+app.get('/metrics', (req, res) => {
+  const mem = process.memoryUsage();
+  res.set('Content-Type', 'text/plain');
+  res.send(`
+# HELP http_requests_total Total de requests HTTP
+# TYPE http_requests_total counter
+http_requests_total ${requestCount}
+
+# HELP http_errors_total Total de errores HTTP
+# TYPE http_errors_total counter
+http_errors_total ${errorCount}
+
+# HELP process_memory_bytes Memoria usada por el proceso
+# TYPE process_memory_bytes gauge
+process_memory_bytes{type="heapUsed"} ${mem.heapUsed}
+process_memory_bytes{type="heapTotal"} ${mem.heapTotal}
+process_memory_bytes{type="rss"} ${mem.rss}
+
+# HELP app_up Estado de la aplicacion (1=ok)
+# TYPE app_up gauge
+app_up 1
+  `.trim());
+});
+
+// ── CRUD Contactos ────────────────────────────────────────────────────────────
 app.get('/contactos', async (req, res) => {
   const { search } = req.query;
   try {
     let result;
     if (search) {
       result = await pool.query(
-        `SELECT * FROM contactos
-         WHERE nombre ILIKE $1 OR email ILIKE $1 OR empresa ILIKE $1
-         ORDER BY nombre`,
+        `SELECT * FROM contactos WHERE nombre ILIKE $1 OR email ILIKE $1 OR empresa ILIKE $1 ORDER BY nombre`,
         [`%${search}%`]
       );
     } else {
@@ -72,7 +112,6 @@ app.get('/contactos', async (req, res) => {
   }
 });
 
-// GET /contactos/:id
 app.get('/contactos/:id', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM contactos WHERE id = $1', [req.params.id]);
@@ -83,7 +122,6 @@ app.get('/contactos/:id', async (req, res) => {
   }
 });
 
-// POST /contactos
 app.post('/contactos', async (req, res) => {
   const { nombre, email, telefono, empresa } = req.body;
   if (!nombre || !email) return res.status(400).json({ error: 'Nombre y email son requeridos' });
@@ -99,7 +137,6 @@ app.post('/contactos', async (req, res) => {
   }
 });
 
-// DELETE /contactos/:id
 app.delete('/contactos/:id', async (req, res) => {
   try {
     const result = await pool.query('DELETE FROM contactos WHERE id = $1 RETURNING *', [req.params.id]);
