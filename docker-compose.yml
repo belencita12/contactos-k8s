@@ -4,7 +4,6 @@ services:
 
   postgres:
     image: postgres:15-alpine
-    container_name: postgres
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -18,7 +17,6 @@ services:
 
   backend:
     image: belencita12/contactos-backend:latest
-    container_name: backend
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
@@ -36,7 +34,6 @@ services:
 
   frontend:
     image: belencita12/contactos-frontend:latest
-    container_name: frontend
     ports:
       - "8080:80"
     depends_on:
@@ -46,7 +43,6 @@ services:
 
   prometheus:
     build: ./monitoring
-    container_name: prometheus
     ports:
       - "9090:9090"
     networks:
@@ -54,7 +50,6 @@ services:
 
   grafana:
     image: grafana/grafana:latest
-    container_name: grafana
     ports:
       - "3001:3000"
     environment:

@@ -39,12 +39,17 @@ pipeline {
         }
 
         stage('Deploy') {
-            steps {
-                echo 'Desplegando con Docker Compose...'
-                sh 'docker-compose down || true'
-                sh 'docker-compose up -d'
-            }
-        }
+        steps {
+        echo 'Limpiando despliegue anterior...'
+        sh 'docker-compose down --remove-orphans || true'
+
+        echo 'Eliminando contenedores antiguos...'
+        sh 'docker container prune -f || true'
+
+        echo 'Desplegando nueva versión...'
+        sh 'docker-compose up -d --force-recreate'
+    }
+}
 
         stage('Verify') {
             steps {
