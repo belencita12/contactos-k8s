@@ -1,12 +1,22 @@
 global:
   scrape_interval: 15s
+  evaluation_interval: 15s
 
 scrape_configs:
+
+  # Métricas propias de Prometheus
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Métricas de la aplicación backend (custom metrics)
   - job_name: 'backend'
     static_configs:
       - targets: ['backend:3000']
     metrics_path: '/metrics'
 
-  - job_name: 'prometheus'
+  # Métricas de contenedores: CPU, memoria, red (cAdvisor)
+  - job_name: 'cadvisor'
     static_configs:
-      - targets: ['localhost:9090']
+      - targets: ['cadvisor:8080']
+    metrics_path: '/metrics'
